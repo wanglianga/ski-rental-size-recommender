@@ -11,6 +11,18 @@ export const inventoryData: InventoryItem[] = [
   { category: 'snowboard', size: '175cm', total: 8, available: 1 },
   { category: 'snowboard', size: '180cm', total: 5, available: 0 },
 
+  { category: 'snowboard', size: '150cm-wide', total: 5, available: 3 },
+  { category: 'snowboard', size: '155cm-wide', total: 6, available: 4 },
+  { category: 'snowboard', size: '160cm-wide', total: 6, available: 2 },
+  { category: 'snowboard', size: '165cm-wide', total: 5, available: 1 },
+
+  { category: 'snowboard', size: '150cm-soft', total: 6, available: 4 },
+  { category: 'snowboard', size: '155cm-soft', total: 8, available: 5 },
+  { category: 'snowboard', size: '155cm-stiff', total: 4, available: 1 },
+  { category: 'snowboard', size: '160cm-soft', total: 6, available: 3 },
+  { category: 'snowboard', size: '160cm-stiff', total: 5, available: 0 },
+  { category: 'snowboard', size: '165cm-stiff', total: 4, available: 2 },
+
   { category: 'boots', size: '36', total: 8, available: 5 },
   { category: 'boots', size: '37', total: 10, available: 7 },
   { category: 'boots', size: '38', total: 12, available: 9 },
@@ -22,6 +34,13 @@ export const inventoryData: InventoryItem[] = [
   { category: 'boots', size: '44', total: 8, available: 1 },
   { category: 'boots', size: '45', total: 5, available: 0 },
   { category: 'boots', size: '46', total: 3, available: 0 },
+
+  { category: 'boots', size: '40-comfort', total: 6, available: 4 },
+  { category: 'boots', size: '41-comfort', total: 6, available: 3 },
+  { category: 'boots', size: '42-comfort', total: 5, available: 2 },
+  { category: 'boots', size: '40-performance', total: 4, available: 1 },
+  { category: 'boots', size: '41-performance', total: 4, available: 2 },
+  { category: 'boots', size: '42-performance', total: 3, available: 0 },
 
   { category: 'helmet', size: 'S(52-55cm)', total: 10, available: 8 },
   { category: 'helmet', size: 'M(55-58cm)', total: 20, available: 15 },
@@ -55,4 +74,41 @@ export function decreaseStock(category: InventoryItem['category'], size: string,
   if (item) {
     item.available = Math.max(0, item.available - count)
   }
+}
+
+export function getSubstituteBoards(baseSize: string): { size: string; type: 'adjacent_length' | 'wide_board' | 'flex_diff' }[] {
+  const baseLen = parseInt(baseSize)
+  const result: { size: string; type: 'adjacent_length' | 'wide_board' | 'flex_diff' }[] = []
+
+  const shorter = `${baseLen - 5}cm`
+  const longer = `${baseLen + 5}cm`
+  if (getStock('snowboard', shorter) > 0) result.push({ size: shorter, type: 'adjacent_length' })
+  if (getStock('snowboard', longer) > 0) result.push({ size: longer, type: 'adjacent_length' })
+
+  const wide = `${baseSize}cm-wide`
+  if (getStock('snowboard', wide) > 0) result.push({ size: wide, type: 'wide_board' })
+
+  const soft = `${baseSize}cm-soft`
+  const stiff = `${baseSize}cm-stiff`
+  if (getStock('snowboard', soft) > 0) result.push({ size: soft, type: 'flex_diff' })
+  if (getStock('snowboard', stiff) > 0) result.push({ size: stiff, type: 'flex_diff' })
+
+  return result
+}
+
+export function getSubstituteBoots(baseSize: string): { size: string; type: 'adjacent_length' | 'boot_fit_diff' }[] {
+  const baseNum = parseInt(baseSize)
+  const result: { size: string; type: 'adjacent_length' | 'boot_fit_diff' }[] = []
+
+  const smaller = `${baseNum - 1}`
+  const larger = `${baseNum + 1}`
+  if (getStock('boots', smaller) > 0) result.push({ size: smaller, type: 'adjacent_length' })
+  if (getStock('boots', larger) > 0) result.push({ size: larger, type: 'adjacent_length' })
+
+  const comfort = `${baseSize}-comfort`
+  const performance = `${baseSize}-performance`
+  if (getStock('boots', comfort) > 0) result.push({ size: comfort, type: 'boot_fit_diff' })
+  if (getStock('boots', performance) > 0) result.push({ size: performance, type: 'boot_fit_diff' })
+
+  return result
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Snowflake, Footprints, HardHat, Eye, Shield, PackageOpen, PackageX, AlertTriangle } from 'lucide-vue-next'
+import { Snowflake, Footprints, HardHat, Eye, Shield, PackageOpen, PackageX, AlertTriangle, Sparkles } from 'lucide-vue-next'
 import type { SizeRecommendation } from '@/types'
+import { boardFlexLabels } from '@/data/sizeCharts'
 
 defineProps<{
   recommendation: SizeRecommendation
@@ -90,6 +91,27 @@ function iconColor(riskLevel: string, stockCount: number): string {
               :key="alt"
               class="text-xs bg-white/5 text-slate-300 px-2 py-0.5 rounded-md ring-1 ring-white/5"
             >{{ alt }}</span>
+          </div>
+        </div>
+
+        <div v-if="recommendation.substituteOptions && recommendation.substituteOptions.length > 0"
+          class="mt-3 text-xs px-3 py-2 rounded-lg bg-orange-500/8 text-orange-300 ring-1 ring-orange-500/15"
+        >
+          <div class="font-semibold text-orange-200 flex items-center gap-1.5">
+            <PackageX :size="12" />
+            首选尺码暂缺，柜台将提供 {{ recommendation.substituteOptions.length }} 种替代方案
+          </div>
+          <div class="text-orange-300/70 text-[11px] mt-1">
+            相邻长度 / 加宽板 / 软硬差异等，需柜员扫码确认后出件
+          </div>
+        </div>
+
+        <div v-if="recommendation.styleCalibration && recommendation.category === 'snowboard'"
+          class="mt-3 text-xs px-3 py-2 rounded-lg bg-cyan-500/8 text-cyan-300 ring-1 ring-cyan-500/15"
+        >
+          <div class="font-semibold text-cyan-200 flex items-center gap-1.5">
+            <Sparkles :size="12" />
+            风格校准：{{ boardFlexLabels[recommendation.styleCalibration.boardFlex] }} / 前{{ recommendation.styleCalibration.bindingAngles.front }}°后{{ recommendation.styleCalibration.bindingAngles.rear }}°
           </div>
         </div>
 

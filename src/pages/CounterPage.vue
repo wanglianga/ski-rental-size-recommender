@@ -4,11 +4,12 @@ import { useRouter } from 'vue-router'
 import {
   ChevronLeft, Snowflake, Footprints, HardHat, Eye, Shield,
   CheckCircle, Clock, AlertTriangle, Package, RotateCcw, DollarSign, Hash,
-  User, ArrowRightLeft, Moon
+  User, ArrowRightLeft, Moon, PackageX, Sparkles
 } from 'lucide-vue-next'
 import { useRentalStore } from '@/composables/useRentalStore'
 import type { SizeRecommendation } from '@/types'
-import { depositPrices } from '@/data/sizeCharts'
+import { depositPrices, ridingStyleLabels, boardFlexLabels, bootFitLabels } from '@/data/sizeCharts'
+import CounterAlternativeConfirm from '@/components/CounterAlternativeConfirm.vue'
 
 const router = useRouter()
 const { pendingOrders, confirmedOrders, allOrders, updateOrderStatus } = useRentalStore()
@@ -16,19 +17,44 @@ const { pendingOrders, confirmedOrders, allOrders, updateOrderStatus } = useRent
 const selectedOrderId = ref<string | null>(null)
 const exchangeCountdown = ref<Record<string, number>>({})
 const now = ref(Date.now())
+const showAltConfirm = ref(false)
+const appliedSubstitutes = ref<Record<string, Record<string, string>>>({})
 
 const selectedOrder = computed(() => {
   if (!selectedOrderId.value) return null
   return allOrders.value.find(o => o.orderId === selectedOrderId.value) ?? null
 })
 
+const hasOutOfStockWithAlternatives = computed(() => {
+  if (!selectedOrder.value) return false
+  return selectedOrder.value.recommendations.some(
+    r => r.stockCount === 0 && r.substituteOptions && r.substituteOptions.length > 0
+  )
+})
+
 function selectOrder(orderId: string) {
   selectedOrderId.value = orderId
+}
+
+function handleConfirmPickup() {
+  if (!selectedOrder.value) return
+  if (hasOutOfStockWithAlternatives.value) {
+    showAltConfirm.value = true
+  } else {
+    confirmPickup(selectedOrder.value.orderId)
+  }
 }
 
 function confirmPickup(orderId: string) {
   updateOrderStatus(orderId, 'picked_up')
   selectedOrderId.value = null
+}
+
+function onAltConfirm(selected: Record<string, string>) {
+  if (!selectedOrder.value) return
+  appliedSubstitutes.value[selectedOrder.value.orderId] = selected
+  showAltConfirm.value = false
+  confirmPickup(selectedOrder.value.orderId)
 }
 
 function confirmReturn(orderId: string) {
@@ -114,6 +140,17 @@ function stockStyle(rec: SizeRecommendation): string {
   if (rec.isLowStock) return 'text-orange-400'
   return 'text-emerald-400'
 }
+
+function getAppliedSubstituteSize(orderId: string, category: string): string | null {
+  const applied = appliedSubstitutes.value[orderId]
+  if (!applied) return null
+  const subId = applied[category]
+  if (!subId) return null
+  const order = allOrders.value.find(o => o.orderId === orderId)
+  const rec = order?.recommendations.find(r => r.category === category)
+  const sub = rec?.substituteOptions?.find(s => s.id === subId)
+  return sub?.size ?? null
+}
 </script>
 
 <template>
@@ -161,6 +198,12 @@ function stockStyle(rec: SizeRecommendation): string {
             </span>
             <span>{{ timeAgo(order.createdAt) }}</span>
           </div>
+          <div v-if="order.recommendations.some(r => r.stockCount === 0)"
+            class="flex items-center gap-1 mt-2 text-[10px] text-orange-400"
+          >
+            <PackageX :size="10" />
+            部分首选尺码缺货，需替代确认
+          </div>
         </div>
 
         <div v-if="allOrders.length === 0" class="text-center py-16 text-slate-600">
@@ -193,18 +236,32 @@ function stockStyle(rec: SizeRecommendation): string {
                 <span class="text-slate-700">·</span>
                 <span>脚长 {{ selectedOrder.guestInfo.footLength }}mm</span>
               </div>
-              <div class="text-slate-500 text-xs mt-1.5 flex items-center gap-3">
+              <div class="text-slate-500 text-xs mt-1.5 flex items-center gap-3 flex-wrap">
                 <span>取件 {{ selectedOrder.guestInfo.pickupTime }}</span>
                 <span class="text-slate-700">·</span>
                 <span>还件 {{ selectedOrder.guestInfo.returnTime }}</span>
                 <span v-if="selectedOrder.guestInfo.nightReturn" class="flex items-center gap-1 text-orange-400 ml-1">
                   <Moon :size="12" /> 夜场
                 </span>
+                <span v-if="selectedOrder.guestInfo.ridingStyle" class="flex items-center gap-1 text-cyan-400">
+                  <Sparkles :size="12" />
+                  {{ ridingStyleLabels[selectedOrder.guestInfo.ridingStyle] }}
+                </span>
               </div>
             </div>
             <div class="text-right">
               <div class="text-xs text-slate-600">下单时间</div>
               <div class="text-slate-300 text-sm font-medium">{{ formatTime(selectedOrder.createdAt) }}</div>
+            </div>
+          </div>
+
+          <div v-if="hasOutOfStockWithAlternatives && selectedOrder.status === 'pending'"
+            class="flex items-start gap-2.5 bg-orange-500/10 border border-orange-500/20 ring-1 ring-orange-500/10 text-orange-300 text-sm rounded-xl px-4 py-3.5"
+          >
+            <ArrowRightLeft :size="16" class="mt-0.5 flex-shrink-0 text-orange-400" />
+            <div class="flex-1">
+              <div class="font-semibold text-orange-200 text-xs mb-1">首选装备被租走</div>
+              <div class="text-xs text-orange-300/80 leading-relaxed">点击「确认出件」将进入替代装备选择流程，请为游客选择相邻长度、加宽板或软硬差异的替代方案，扫码确认后再生成取件单。</div>
             </div>
           </div>
 
@@ -223,19 +280,45 @@ function stockStyle(rec: SizeRecommendation): string {
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="text-white font-bold text-sm">{{ rec.label }}</div>
-                  <div class="aurora-text font-black text-xl tracking-tight">{{ rec.recommendedSize }}</div>
+                  <div class="aurora-text font-black text-xl tracking-tight">
+                    {{ getAppliedSubstituteSize(selectedOrder.orderId, rec.category) || rec.recommendedSize }}
+                  </div>
                 </div>
+              </div>
+
+              <div v-if="getAppliedSubstituteSize(selectedOrder.orderId, rec.category)"
+                class="flex items-center gap-1.5 mb-2 text-[11px] text-emerald-400"
+              >
+                <CheckCircle :size="11" />
+                替代方案：{{ rec.recommendedSize }} → {{ getAppliedSubstituteSize(selectedOrder.orderId, rec.category) }}
               </div>
 
               <div class="text-xs text-slate-500 mb-2">{{ rec.reason }}</div>
 
               <div class="flex items-center gap-2 mb-2">
                 <span class="text-xs font-semibold" :class="stockStyle(rec)">
-                  库存 {{ rec.stockCount }}
+                  {{ rec.stockCount === 0 ? '无库存（选替代）' : `库存 ${rec.stockCount}` }}
                 </span>
                 <span v-if="rec.isLowStock && rec.stockCount > 0" class="text-xs text-orange-400 flex items-center gap-0.5">
                   <AlertTriangle :size="10" /> 紧张
                 </span>
+              </div>
+
+              <div v-if="rec.styleCalibration && rec.category === 'snowboard'"
+                class="mb-2 p-2 rounded-lg bg-cyan-500/5 ring-1 ring-cyan-500/10"
+              >
+                <div class="text-[10px] text-cyan-400 font-semibold mb-1">风格校准</div>
+                <div class="flex flex-wrap gap-1">
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-slate-300">
+                    {{ boardFlexLabels[rec.styleCalibration.boardFlex] }}
+                  </span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-slate-300">
+                    前{{ rec.styleCalibration.bindingAngles.front }}°/后{{ rec.styleCalibration.bindingAngles.rear }}°
+                  </span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-slate-300">
+                    {{ bootFitLabels[rec.styleCalibration.bootFit] }}
+                  </span>
+                </div>
               </div>
 
               <div v-if="rec.alternativeSizes.length > 0" class="mt-2">
@@ -246,6 +329,20 @@ function stockStyle(rec: SizeRecommendation): string {
                     :key="alt"
                     class="text-xs bg-white/5 text-slate-300 px-2.5 py-1 rounded-lg ring-1 ring-white/5 cursor-pointer hover:bg-sky-500/15 hover:text-sky-300 hover:ring-sky-500/20 transition-all"
                   >{{ alt }}</span>
+                </div>
+              </div>
+
+              <div v-if="rec.substituteOptions && rec.substituteOptions.length > 0" class="mt-2">
+                <div class="text-xs text-orange-400 font-semibold mb-1.5 flex items-center gap-1">
+                  <ArrowRightLeft :size="10" />
+                  推荐替代方案（{{ rec.substituteOptions.length }}个）
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <span
+                    v-for="sub in rec.substituteOptions"
+                    :key="sub.id"
+                    class="text-xs bg-orange-500/8 text-orange-300 px-2.5 py-1 rounded-lg ring-1 ring-orange-500/15"
+                  >{{ sub.size }}</span>
                 </div>
               </div>
 
@@ -300,11 +397,14 @@ function stockStyle(rec: SizeRecommendation): string {
           <div class="flex gap-3">
             <template v-if="selectedOrder.status === 'pending'">
               <button
-                @click="confirmPickup(selectedOrder.orderId)"
-                class="flex-1 py-4 rounded-2xl font-bold text-base btn-primary flex items-center justify-center gap-2 active:scale-[0.97] transition-transform"
+                @click="handleConfirmPickup"
+                class="flex-1 py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2 active:scale-[0.97] transition-transform"
+                :class="hasOutOfStockWithAlternatives
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/20'
+                  : 'btn-primary'"
               >
-                <CheckCircle :size="20" />
-                确认出件
+                <component :is="hasOutOfStockWithAlternatives ? ArrowRightLeft : CheckCircle" :size="20" />
+                {{ hasOutOfStockWithAlternatives ? '选择替代方案并出件' : '确认出件' }}
               </button>
               <button
                 @click="startExchangeTimer(selectedOrder.orderId)"
@@ -354,6 +454,15 @@ function stockStyle(rec: SizeRecommendation): string {
         </div>
       </div>
     </div>
+
+    <CounterAlternativeConfirm
+      v-if="selectedOrder"
+      :visible="showAltConfirm"
+      :recommendations="selectedOrder.recommendations"
+      :order-id="selectedOrder.orderId"
+      @close="showAltConfirm = false"
+      @confirm="onAltConfirm"
+    />
   </div>
 </template>
 

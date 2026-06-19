@@ -121,3 +121,120 @@ export const protectionGearOptions = [
   { value: 'wrist', label: '护腕', icon: 'Hand' },
   { value: 'back', label: '背甲', icon: 'ShieldHalf' },
 ]
+
+export const ridingStyleLabels: Record<string, string> = {
+  first_time: '初次上雪',
+  carving: '能连续转弯',
+  park: '喜欢公园道具',
+  advanced_slope: '准备上高级道',
+}
+
+export const ridingStyleDescriptions: Record<string, string> = {
+  first_time: '第一次或刚开始学，还在推坡练习',
+  carving: '能流畅换刃、连续转弯，可滑中级道',
+  park: '喜欢玩跳台、道具，追求动作和花样',
+  advanced_slope: '熟练控板，准备挑战陡坡和野雪',
+}
+
+export const boardFlexLabels: Record<string, string> = {
+  soft: '软板',
+  medium: '中等硬度',
+  stiff: '硬板',
+}
+
+export const boardFlexDescriptions: Record<string, string> = {
+  soft: '容错率高，容易操控，适合新手和公园',
+  medium: '均衡性能，适用范围广，适合大多数人',
+  stiff: '高速稳定，刻雪精准，适合高手和陡坡',
+}
+
+export const bootFitLabels: Record<string, string> = {
+  comfort: '舒适包裹',
+  standard: '标准包裹',
+  performance: '紧致包裹',
+}
+
+export const bootFitDescriptions: Record<string, string> = {
+  comfort: '鞋仓宽松，脚感舒适，适合全天滑行',
+  standard: '贴合适中，兼顾舒适和性能',
+  performance: '紧致包裹，力传导直接，适合竞技和高手',
+}
+
+export const boardWidthLabels: Record<string, string> = {
+  standard: '标准板宽',
+  wide: '加宽板',
+}
+
+interface RidingStyleCalibrationMap {
+  boardLengthAdjustment: number
+  boardFlex: 'soft' | 'medium' | 'stiff'
+  bindingAngles: { front: number; rear: number; stance: 'duck' | 'forward' | 'alpine' }
+  bootFit: 'comfort' | 'standard' | 'performance'
+  boardWidth: 'standard' | 'wide'
+  notRecommended: { size: string; reason: string; illustration: string }
+}
+
+export const ridingStyleCalibrationMap: Record<string, RidingStyleCalibrationMap> = {
+  first_time: {
+    boardLengthAdjustment: -5,
+    boardFlex: 'soft',
+    bindingAngles: { front: 15, rear: 0, stance: 'forward' },
+    bootFit: 'comfort',
+    boardWidth: 'standard',
+    notRecommended: {
+      size: '更长5cm',
+      reason: '长板启动和刹车都更费力，新手在推坡阶段难以控制',
+      illustration: 'longer'
+    }
+  },
+  carving: {
+    boardLengthAdjustment: 0,
+    boardFlex: 'medium',
+    bindingAngles: { front: 18, rear: -6, stance: 'forward' },
+    bootFit: 'standard',
+    boardWidth: 'standard',
+    notRecommended: {
+      size: '更短5cm',
+      reason: '短板高速刻雪不稳定，容易抖动发颤，影响连续转弯节奏',
+      illustration: 'shorter'
+    }
+  },
+  park: {
+    boardLengthAdjustment: -8,
+    boardFlex: 'soft',
+    bindingAngles: { front: 15, rear: -15, stance: 'duck' },
+    bootFit: 'standard',
+    boardWidth: 'standard',
+    notRecommended: {
+      size: '长10cm',
+      reason: '长板在道具上转动半径大，跳台动作不够灵活，容易卡刃',
+      illustration: 'longer'
+    }
+  },
+  advanced_slope: {
+    boardLengthAdjustment: 5,
+    boardFlex: 'stiff',
+    bindingAngles: { front: 21, rear: -9, stance: 'alpine' },
+    bootFit: 'performance',
+    boardWidth: 'wide',
+    notRecommended: {
+      size: '更短5cm + 软板',
+      reason: '陡坡高速时短软板会发飘，抓雪不足，容易失控',
+      illustration: 'softer'
+    }
+  }
+}
+
+export const substituteTypeLabels: Record<string, string> = {
+  adjacent_length: '相邻长度',
+  wide_board: '加宽板',
+  flex_diff: '软硬差异',
+  boot_fit_diff: '包裹感差异',
+}
+
+export const snowConditionLabels: Record<string, string[]> = {
+  adjacent_length: ['粉雪', '机压雪'],
+  wide_board: ['粉雪', '烂雪'],
+  flex_diff: ['机压雪'],
+  boot_fit_diff: ['全天滑行'],
+}

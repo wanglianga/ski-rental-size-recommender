@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
-import type { GuestInfo, SizeRecommendation, RentalOrder, RiskAlert } from '@/types'
-import { getStock, checkLowStock } from '@/data/inventory'
+import type { GuestInfo, SizeRecommendation, RentalOrder, RiskAlert, RidingStyle, SubstituteOption } from '@/types'
+import { getStock, checkLowStock, getSubstituteBoards, getSubstituteBoots } from '@/data/inventory'
 import {
   footLengthToBootSize,
   heightBoardChart,
@@ -9,6 +9,11 @@ import {
   weightProtectionChart,
   depositPrices,
   nightReturnFee,
+  ridingStyleCalibrationMap,
+  boardFlexLabels,
+  bootFitLabels,
+  substituteTypeLabels,
+  snowConditionLabels,
 } from '@/data/sizeCharts'
 
 export function useRecommendation() {
@@ -20,6 +25,7 @@ export function useRecommendation() {
     gender: 'male',
     experience: 'beginner',
     slopePreference: 'beginner',
+    ridingStyle: undefined,
     pickupTime: '',
     returnTime: '',
     nightReturn: false,
@@ -93,6 +99,15 @@ export function useRecommendation() {
       })
     }
 
+    if (info.ridingStyle && !['first_time', 'carving', 'park', 'advanced_slope'].includes(info.ridingStyle)) {
+      alerts.push({
+        level: 'info',
+        title: '滑行风格已校准',
+        message: '已根据您的滑行风格调整板长、硬度和固定器角度',
+        icon: 'Sparkles',
+      })
+    }
+
     return alerts
   })
 
@@ -119,16 +134,33 @@ export function useRecommendation() {
   }
 }
 
+function ridingStyleFromInfo(info: GuestInfo): RidingStyle {
+  if (info.ridingStyle) return info.ridingStyle
+  if (info.experience === 'beginner') return 'first_time'
+  if (info.slopePreference === 'park') return 'park'
+  if (info.slopePreference === 'advanced' || info.experience === 'advanced') return 'advanced_slope'
+  return 'carving'
+}
+
 function recommendSnowboard(info: GuestInfo): SizeRecommendation {
-  let boardSize = '155cm'
+  const style = ridingStyleFromInfo(info)
+  const calib = ridingStyleCalibrationMap[style]
+
+  let baseSize = '155cm'
   const match = heightBoardChart.find(
     c => info.height >= c.minHeight && info.height < c.maxHeight
   )
-  if (match) boardSize = match.boardSize
+  if (match) baseSize = match.boardSize
 
-  if (info.experience === 'advanced' && info.slopePreference === 'park') {
-    const currentLen = parseInt(boardSize)
-    boardSize = `${currentLen - 5}cm`
+  const baseLen = parseInt(baseSize)
+  const adjustedLen = baseLen + calib.boardLengthAdjustment
+  let boardSize = `${adjustedLen}cm`
+
+  if (calib.boardWidth === 'wide') {
+    const wideSize = `${boardSize}-wide`
+    if (getStock('snowboard', wideSize) > 0) {
+      boardSize = wideSize
+    }
   }
 
   if (info.weight > 90) {
@@ -156,12 +188,37 @@ function recommendSnowboard(info: GuestInfo): SizeRecommendation {
   }
 
   const reasons: string[] = []
-  reasons.push(`身高 ${info.height}cm → 板长 ${boardSize}`)
-  if (info.experience === 'advanced' && info.slopePreference === 'park') {
-    reasons.push('公园滑行偏好，板长缩短5cm便于操控')
+  reasons.push(`身高 ${info.height}cm → 基础板长 ${baseSize}`)
+  if (calib.boardLengthAdjustment !== 0) {
+    const dir = calib.boardLengthAdjustment > 0 ? '增加' : '缩短'
+    reasons.push(`${dir} ${Math.abs(calib.boardLengthAdjustment)}cm（${style === 'park' ? '公园道具操控灵活' : style === 'advanced_slope' ? '高级道高速稳定' : style === 'first_time' ? '新手更容易操控' : '标准刻雪长度'}）`)
   }
-  if (info.weight > 90) {
-    reasons.push('体重较大，板长增加5cm增强稳定性')
+  reasons.push(`硬度：${boardFlexLabels[calib.boardFlex]}`)
+  if (calib.boardWidth === 'wide') reasons.push('加宽板：大脚/粉雪友好')
+
+  const substituteOptions: SubstituteOption[] = []
+  if (stock === 0) {
+    const subs = getSubstituteBoards(`${baseLen}cm`)
+    subs.forEach((s, idx) => {
+      substituteOptions.push({
+        id: `board-sub-${idx}`,
+        type: s.type,
+        label: substituteTypeLabels[s.type],
+        size: s.size,
+        description: s.type === 'wide_board'
+          ? '加宽板，脚大不易出界，粉雪浮力更好'
+          : s.type === 'flex_diff'
+          ? s.size.includes('soft') ? '软板，容错率高但高速易颤' : '硬板，高速稳定但操控要求高'
+          : s.size.includes('wide') ? '加宽板，粉雪和大脚友好' : '相邻长度，性能接近原推荐',
+        risks: s.type === 'flex_diff'
+          ? s.size.includes('soft') ? ['高速刻雪可能发颤', '陡坡抓雪力不足'] : ['新手不易操控', '容错率较低']
+          : s.type === 'adjacent_length'
+          ? ['板长差异可能影响操控感', '需适应新的平衡点']
+          : ['雪板更重', '需要更大的立刃角度'],
+        stockCount: getStock('snowboard', s.size),
+        suitableSnowConditions: snowConditionLabels[s.type] ?? [],
+      })
+    })
   }
 
   return {
@@ -175,13 +232,39 @@ function recommendSnowboard(info: GuestInfo): SizeRecommendation {
     reason: reasons.join('；'),
     riskLevel,
     riskMessage,
+    styleCalibration: {
+      boardLengthAdjustment: calib.boardLengthAdjustment,
+      boardFlex: calib.boardFlex,
+      bindingAngles: calib.bindingAngles,
+      bootFit: calib.bootFit,
+      boardWidth: calib.boardWidth,
+    },
+    notRecommendedSize: {
+      size: calib.notRecommended.size,
+      reason: calib.notRecommended.reason,
+      illustration: calib.notRecommended.illustration,
+    },
+    substituteOptions: substituteOptions.length > 0 ? substituteOptions : undefined,
   }
 }
 
 function recommendBoots(info: GuestInfo): SizeRecommendation {
+  const style = ridingStyleFromInfo(info)
+  const calib = ridingStyleCalibrationMap[style]
+
   const bootSize = footLengthToBootSize(info.footLength)
-  const stock = getStock('boots', bootSize)
-  const isLowStock = checkLowStock('boots', bootSize)
+  let finalSize = bootSize
+
+  if (calib.bootFit === 'comfort') {
+    const comfortSize = `${bootSize}-comfort`
+    if (getStock('boots', comfortSize) > 0) finalSize = comfortSize
+  } else if (calib.bootFit === 'performance') {
+    const perfSize = `${bootSize}-performance`
+    if (getStock('boots', perfSize) > 0) finalSize = perfSize
+  }
+
+  const stock = getStock('boots', finalSize)
+  const isLowStock = checkLowStock('boots', finalSize)
 
   const currentNum = parseInt(bootSize)
   const altSizes = [`${currentNum - 1}`, `${currentNum + 1}`].filter(s => {
@@ -204,17 +287,39 @@ function recommendBoots(info: GuestInfo): SizeRecommendation {
     riskMessage = riskMessage || '该尺码雪鞋库存紧张'
   }
 
+  const substituteOptions: SubstituteOption[] = []
+  if (stock === 0) {
+    const subs = getSubstituteBoots(bootSize)
+    subs.forEach((s, idx) => {
+      substituteOptions.push({
+        id: `boot-sub-${idx}`,
+        type: s.type,
+        label: substituteTypeLabels[s.type],
+        size: s.size,
+        description: s.type === 'boot_fit_diff'
+          ? s.size.includes('comfort') ? '舒适款：鞋仓宽松，全天滑行不累脚' : '性能款：紧致包裹，力传导直接'
+          : '相邻尺码：建议现场试穿确认包裹感',
+        risks: s.type === 'adjacent_length'
+          ? ['尺码不合脚可能导致磨脚', '影响发力和操控']
+          : ['包裹感变化需要适应', '长时间滑行可能疲劳'],
+        stockCount: getStock('boots', s.size),
+        suitableSnowConditions: snowConditionLabels[s.type] ?? [],
+      })
+    })
+  }
+
   return {
     category: 'boots',
     label: '雪鞋',
     icon: 'Footprints',
-    recommendedSize: bootSize,
+    recommendedSize: finalSize,
     alternativeSizes: altSizes,
     stockCount: stock,
     isLowStock,
-    reason: `脚长 ${info.footLength}mm → 鞋码 ${bootSize}`,
+    reason: `脚长 ${info.footLength}mm → 鞋码 ${bootSize}（${bootFitLabels[calib.bootFit]}）`,
     riskLevel,
     riskMessage,
+    substituteOptions: substituteOptions.length > 0 ? substituteOptions : undefined,
   }
 }
 

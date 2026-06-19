@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { ChevronLeft, CheckCircle, AlertCircle } from 'lucide-vue-next'
+import { computed } from 'vue'
+import { ChevronLeft, CheckCircle, AlertCircle, PackageX, Sparkles } from 'lucide-vue-next'
 import { useRecommendation } from '@/composables/useRecommendation'
 import { useRentalStore } from '@/composables/useRentalStore'
 import RecommendationCard from '@/components/guest/RecommendationCard.vue'
+import RidingStyleCalibration from '@/components/guest/RidingStyleCalibration.vue'
 import RiskAlerts from '@/components/guest/RiskAlerts.vue'
 
 const router = useRouter()
 const { guestInfo, recommendations, riskAlerts, depositAmount } = useRecommendation()
 const { createOrder } = useRentalStore()
+
+const snowboardRec = computed(() => recommendations.value.find(r => r.category === 'snowboard'))
+const hasOutOfStock = computed(() => recommendations.value.some(r => r.stockCount === 0))
 
 function confirmOrder() {
   const order = createOrder({
@@ -35,15 +40,36 @@ function confirmOrder() {
     <div class="flex-1 px-4 py-6 overflow-y-auto space-y-5">
       <RiskAlerts :alerts="riskAlerts" />
 
+      <Transition name="fade">
+        <RidingStyleCalibration
+          v-if="snowboardRec && snowboardRec.styleCalibration"
+          :recommendation="snowboardRec"
+          :riding-style="guestInfo.ridingStyle"
+          class="fade-up stagger-1"
+        />
+      </Transition>
+
       <div class="space-y-3">
         <RecommendationCard
           v-for="(rec, idx) in recommendations"
           :key="rec.category"
           :recommendation="rec"
           class="fade-up"
-          :class="`stagger-${idx + 1}`"
+          :class="`stagger-${idx + 2}`"
         />
       </div>
+
+      <Transition name="alert">
+        <div v-if="hasOutOfStock"
+          class="flex items-start gap-2.5 bg-orange-500/10 border border-orange-500/20 ring-1 ring-orange-500/10 text-orange-300 text-sm rounded-xl px-4 py-3.5"
+        >
+          <PackageX :size="16" class="mt-0.5 flex-shrink-0" />
+          <div class="flex-1">
+            <div class="font-semibold text-orange-200 text-xs mb-1">部分首选尺码暂缺</div>
+            <div class="text-xs text-orange-300/80 leading-relaxed">柜台会为您推荐相邻长度、加宽板或软硬差异的替代装备，柜员扫码确认后出件，请配合试穿确认合适。</div>
+          </div>
+        </div>
+      </Transition>
 
       <div class="frost-card-strong rounded-2xl p-5 ring-1 ring-white/5">
         <div class="flex items-center justify-between">
